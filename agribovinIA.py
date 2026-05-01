@@ -61,7 +61,7 @@ with col_left:
             return colors.get(val, "")
 
         st.dataframe(
-            df.style.applymap(color_statut, subset=["Statut"]),
+           df.style.map(color_statut, subset=["Statut"])
             use_container_width=True
         )
     else:
