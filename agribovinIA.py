@@ -176,6 +176,7 @@ h2, h3 { color: #2e7d32 !important; font-weight: 600 !important; }
 }
 [data-testid="stSidebar"] * { color: #2e7d32 !important; }
 
+/* Tous les boutons — base */
 .stButton > button {
     background-color: #2e7d32 !important;
     color: #ffffff !important;
@@ -188,6 +189,22 @@ h2, h3 { color: #2e7d32 !important; font-weight: 600 !important; }
     transition: background 0.2s ease !important;
 }
 .stButton > button:hover { background-color: #388e3c !important; color: #ffffff !important; }
+
+/* Bouton Actualiser — bleu */
+.btn-actualiser .stButton > button {
+    background-color: #1565c0 !important;
+}
+.btn-actualiser .stButton > button:hover {
+    background-color: #1976d2 !important;
+}
+
+/* Bouton Système — gris ardoise */
+.btn-systeme .stButton > button {
+    background-color: #546e7a !important;
+}
+.btn-systeme .stButton > button:hover {
+    background-color: #607d8b !important;
+}
 
 [data-testid="stSelectbox"] > div > div {
     background-color: #f9fdf6 !important;
@@ -289,9 +306,11 @@ with st.sidebar:
 
     st.markdown("---")
 
-    if st.button(T["refresh_btn"]):
+    st.markdown('<div class="btn-actualiser">', unsafe_allow_html=True)
+    if st.button(T["refresh_btn"], key="btn_refresh"):
         st.cache_data.clear()
         st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
     now_str = datetime.now().strftime("%d/%m/%Y  %H:%M:%S")
@@ -299,8 +318,10 @@ with st.sidebar:
     st.markdown("---")
 
     # ── Bouton Système (toggle) ──
-    if st.button(T["system_btn"]):
+    st.markdown('<div class="btn-systeme">', unsafe_allow_html=True)
+    if st.button(T["system_btn"], key="btn_system"):
         st.session_state.show_system = not st.session_state.show_system
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.show_system:
         st.markdown(
