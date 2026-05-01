@@ -60,10 +60,7 @@ with col_left:
             }
             return colors.get(val, "")
 
-        st.dataframe(
-           df.style.map(color_statut, subset=["Statut"])
-            use_container_width=True
-        )
+        st.dataframe(df, use_container_width=True)
     else:
         st.info("Aucun résultat IA disponible")
 
