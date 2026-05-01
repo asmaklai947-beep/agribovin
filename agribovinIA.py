@@ -1,480 +1,378 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import requests
-from datetime import datetime
-import time
-
-st.set_page_config(
-    page_title="AgriBovin IA",
-    page_icon="🐄",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-API_URL = "http://bovin.atwebpages.com/api/ia_data.php"
-
-# ─── TRADUCTIONS ──────────────────────────────────────────────────────────────
-TRANSLATIONS = {
-    "FR": {
-        "title": "🐄 AgriBovin — Santé Animale Intelligente",
-        "caption": "Tableau de bord temps réel · IA diagnostique · Refresh automatique 30 s",
-        "refresh_btn": "🔄 Actualiser les données",
-        "last_update": "⏱️ **Dernière maj :**",
-        "system": "📡 Système",
-        "system_api": "**API :**",
-        "system_db": "**DB :**",
-        "system_refresh": "**Refresh :**",
-        "system_btn": "📡 Informations Système",
-        "recent_alerts": "🚨 Alertes récentes",
-        "no_alert": "✅ Aucune alerte active",
-        "alert_load_err": "❌ Impossible de charger les alertes",
-        "overview": "### 📊 Vue d'ensemble",
-        "total": "📦 Total animaux",
-        "healthy": "✅ En bonne santé",
-        "alert_count": "⚠️ En alerte",
-        "critical": "🚨 Critiques",
-        "charts": "### 📈 Visualisations",
-        "pie_title": "Répartition des statuts de santé",
-        "bar_title": "Score de confiance IA par animal",
-        "diag_title": "### 📋 Diagnostic détaillé",
-        "filter_label": "Filtrer par statut :",
-        "filter_all": "Tous",
-        "col_animal": "🐄 Animal",
-        "col_status": "📊 Statut",
-        "col_diag": "🔬 Diagnostic",
-        "col_conf": "💯 Confiance %",
-        "no_data": "ℹ️ Aucune donnée de diagnostic disponible.",
-        "footer_source": "Source",
-        "footer_last": "Dernière analyse",
-        "footer_refresh": "Auto-refresh : 30 s",
-        "api_err": "❌ Erreur API :",
-        "api_check": "Vérifiez l'endpoint :",
-        "lang_label": "🌐 Langue / Language",
-        "statuts": {"normal": "normal", "alerte": "alerte", "critique": "critique"},
-        "conf_suffix": "%",
-    },
-    "EN": {
-        "title": "🐄 AgriBovin — Smart Animal Health",
-        "caption": "Real-time dashboard · AI diagnostics · Auto-refresh every 30 s",
-        "refresh_btn": "🔄 Refresh Data",
-        "last_update": "⏱️ **Last update:**",
-        "system": "📡 System",
-        "system_api": "**API:**",
-        "system_db": "**DB:**",
-        "system_refresh": "**Refresh:**",
-        "system_btn": "📡 System Information",
-        "recent_alerts": "🚨 Recent Alerts",
-        "no_alert": "✅ No active alerts",
-        "alert_load_err": "❌ Could not load alerts",
-        "overview": "### 📊 Overview",
-        "total": "📦 Total animals",
-        "healthy": "✅ Healthy",
-        "alert_count": "⚠️ On alert",
-        "critical": "🚨 Critical",
-        "charts": "### 📈 Visualizations",
-        "pie_title": "Health status distribution",
-        "bar_title": "AI confidence score per animal",
-        "diag_title": "### 📋 Detailed Diagnosis",
-        "filter_label": "Filter by status:",
-        "filter_all": "All",
-        "col_animal": "🐄 Animal",
-        "col_status": "📊 Status",
-        "col_diag": "🔬 Diagnosis",
-        "col_conf": "💯 Confidence %",
-        "no_data": "ℹ️ No diagnostic data available.",
-        "footer_source": "Source",
-        "footer_last": "Last analysis",
-        "footer_refresh": "Auto-refresh: 30 s",
-        "api_err": "❌ API Error:",
-        "api_check": "Check endpoint:",
-        "lang_label": "🌐 Langue / Language",
-        "statuts": {"normal": "normal", "alerte": "alert", "critique": "critical"},
-        "conf_suffix": "%",
-    },
-    "AR": {
-        "title": "🐄 أغريبوفان — الصحة الذكية للحيوانات",
-        "caption": "لوحة تحكم فورية · تشخيص بالذكاء الاصطناعي · تحديث تلقائي كل 30 ث",
-        "refresh_btn": "🔄 تحديث البيانات",
-        "last_update": "⏱️ **آخر تحديث:**",
-        "system": "📡 النظام",
-        "system_api": "**API:**",
-        "system_db": "**قاعدة البيانات:**",
-        "system_refresh": "**التحديث:**",
-        "system_btn": "📡 معلومات النظام",
-        "recent_alerts": "🚨 التنبيهات الأخيرة",
-        "no_alert": "✅ لا توجد تنبيهات نشطة",
-        "alert_load_err": "❌ تعذّر تحميل التنبيهات",
-        "overview": "### 📊 نظرة عامة",
-        "total": "📦 إجمالي الحيوانات",
-        "healthy": "✅ بصحة جيدة",
-        "alert_count": "⚠️ في حالة تنبيه",
-        "critical": "🚨 حالات حرجة",
-        "charts": "### 📈 المخططات",
-        "pie_title": "توزيع حالات الصحة",
-        "bar_title": "درجة ثقة الذكاء الاصطناعي لكل حيوان",
-        "diag_title": "### 📋 التشخيص التفصيلي",
-        "filter_label": "تصفية حسب الحالة:",
-        "filter_all": "الكل",
-        "col_animal": "🐄 الحيوان",
-        "col_status": "📊 الحالة",
-        "col_diag": "🔬 التشخيص",
-        "col_conf": "💯 نسبة الثقة %",
-        "no_data": "ℹ️ لا توجد بيانات تشخيصية متاحة.",
-        "footer_source": "المصدر",
-        "footer_last": "آخر تحليل",
-        "footer_refresh": "تحديث تلقائي: 30 ث",
-        "api_err": "❌ خطأ في API:",
-        "api_check": "تحقق من العنوان:",
-        "lang_label": "🌐 Langue / Language",
-        "statuts": {"normal": "طبيعي", "alerte": "تنبيه", "critique": "حرج"},
-        "conf_suffix": "%",
-    }
-}
-
-# ─── CSS ──────────────────────────────────────────────────────────────────────
-st.markdown("""
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#2e7d32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>AgriBovin IA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
-html, body, [data-testid="stAppViewContainer"],
-[data-testid="stMain"], .main, .block-container,
-[data-testid="stMainBlockContainer"] {
-    background-color: #ffffff !important;
-    color: #1a1a1a !important;
-}
-[data-testid="stApp"] { background-color: #ffffff !important; }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7f5;color:#1a1a1a;min-height:100vh}
 
-h1 {
-    color: #1b5e20 !important;
-    font-size: 1.9rem !important;
-    font-weight: 700 !important;
-    border-bottom: 2px solid #c8e6c9;
-    padding-bottom: 10px;
-    margin-bottom: 0 !important;
-}
-h2, h3 { color: #2e7d32 !important; font-weight: 600 !important; }
+  /* ── TOPBAR ── */
+  .topbar{background:#ffffff;border-bottom:1px solid #e0ede0;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+  .topbar-left{display:flex;align-items:center;gap:10px}
+  .logo{width:36px;height:36px;background:#e8f5e9;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px}
+  .app-name{font-size:16px;font-weight:700;color:#1b5e20}
+  .app-sub{font-size:11px;color:#81c784}
+  .topbar-right{display:flex;align-items:center;gap:8px}
 
-[data-testid="metric-container"] {
-    background: #f1f8e9 !important;
-    border: 1px solid #c8e6c9 !important;
-    border-radius: 12px !important;
-    padding: 16px 20px !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
-}
-[data-testid="metric-container"] label {
-    color: #388e3c !important; font-size: 13px !important;
-    font-weight: 600 !important; letter-spacing: 0.03em !important;
-}
-[data-testid="metric-container"] [data-testid="metric-value"] {
-    color: #1b5e20 !important; font-size: 2.2rem !important; font-weight: 800 !important;
-}
-[data-testid="stMetricDelta"] { font-size: 12px !important; }
+  /* ── LANG SWITCHER ── */
+  .lang-switcher{display:flex;background:#f1f8e9;border-radius:20px;padding:3px;gap:2px}
+  .lang-btn{border:none;background:transparent;padding:4px 10px;border-radius:16px;font-size:12px;font-weight:600;color:#388e3c;cursor:pointer;transition:all .15s}
+  .lang-btn.active{background:#2e7d32;color:#ffffff}
 
-[data-testid="stSidebar"] {
-    background-color: #f9fdf6 !important;
-    border-right: 1px solid #c8e6c9 !important;
-}
-[data-testid="stSidebar"] * { color: #2e7d32 !important; }
+  /* ── REFRESH BTN ── */
+  .refresh-btn{width:34px;height:34px;border-radius:50%;background:#f1f8e9;border:1px solid #c8e6c9;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:transform .3s}
+  .refresh-btn.spinning{animation:spin .6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
 
-.stButton > button {
-    background-color: #2e7d32 !important;
-    color: #ffffff !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    font-size: 14px !important;
-    padding: 8px 16px !important;
-    width: 100% !important;
-    transition: background 0.2s ease !important;
-}
-.stButton > button:hover { background-color: #388e3c !important; color: #ffffff !important; }
+  /* ── STATUS BAR ── */
+  .status-bar{background:#e8f5e9;padding:6px 16px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#2e7d32}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:#4caf50;display:inline-block;margin-right:5px;animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 
-[data-testid="stSelectbox"] > div > div {
-    background-color: #f9fdf6 !important;
-    border: 1px solid #c8e6c9 !important;
-    border-radius: 8px !important;
-    color: #1b5e20 !important;
-}
+  /* ── MAIN ── */
+  .main{padding:14px 14px 80px}
 
-[data-testid="stDataFrame"] {
-    background-color: #ffffff !important;
-    border: 1px solid #c8e6c9 !important;
-    border-radius: 10px !important;
-    overflow: hidden !important;
-}
+  /* ── ERROR ── */
+  .error-card{background:#ffebee;border:1px solid #ffcdd2;border-radius:12px;padding:16px;margin-bottom:14px;color:#b71c1c;font-size:14px}
 
-hr { border-color: #c8e6c9 !important; margin: 12px 0 !important; }
+  /* ── METRICS GRID ── */
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .metric{background:#ffffff;border-radius:12px;padding:14px;border:1px solid #e8f0e8}
+  .metric-label{font-size:11px;color:#78909c;margin-bottom:4px;font-weight:500}
+  .metric-value{font-size:26px;font-weight:800;line-height:1}
+  .metric-value.green{color:#2e7d32}
+  .metric-value.orange{color:#e65100}
+  .metric-value.red{color:#c62828}
+  .metric-value.blue{color:#1565c0}
+  .metric-badge{display:inline-block;margin-top:5px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px}
+  .badge-ok{background:#e8f5e9;color:#2e7d32}
+  .badge-warn{background:#fff3e0;color:#e65100}
+  .badge-crit{background:#ffebee;color:#c62828}
 
-.alert-box {
-    padding: 10px 14px; border-radius: 8px;
-    margin: 5px 0; font-size: 13px; line-height: 1.4;
-}
-.alert-critique {
-    background-color: #ffebee; border-left: 4px solid #e53935; color: #b71c1c;
-}
-.alert-alerte {
-    background-color: #fff8e1; border-left: 4px solid #fb8c00; color: #e65100;
-}
-.alert-normal {
-    background-color: #e8f5e9; border-left: 4px solid #43a047; color: #1b5e20;
-}
+  /* ── SECTION TITLE ── */
+  .section-title{font-size:13px;font-weight:700;color:#37474f;margin:16px 0 10px;text-transform:uppercase;letter-spacing:.06em}
 
-/* System info panel */
-.system-panel {
-    background: #f1f8e9;
-    border: 1px solid #c8e6c9;
-    border-radius: 10px;
-    padding: 12px 16px;
-    margin-top: 8px;
-    font-size: 13px;
-}
-.system-panel p { margin: 4px 0; color: #2e7d32; }
+  /* ── CARD ── */
+  .card{background:#ffffff;border-radius:14px;border:1px solid #e8f0e8;padding:14px;margin-bottom:12px}
+  .card-title{font-size:13px;font-weight:600;color:#546e7a;margin-bottom:12px}
 
-.footer-bar {
-    text-align: center; color: #81c784; font-size: 12px;
-    padding: 10px; margin-top: 10px;
-    border-top: 1px solid #e8f5e9; background-color: #ffffff;
-}
+  /* ── DONUT LEGEND ── */
+  .legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+  .legend-item{display:flex;align-items:center;gap:5px;font-size:12px;color:#546e7a}
+  .legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
 
-[data-testid="stVerticalBlock"],
-[data-testid="stHorizontalBlock"],
-[data-testid="column"] { background-color: transparent !important; }
+  /* ── ALERTS ── */
+  .alert-item{padding:10px 12px;border-radius:10px;margin-bottom:8px;font-size:13px}
+  .alert-item:last-child{margin-bottom:0}
+  .alert-crit{background:#ffebee;border-left:3px solid #e53935;color:#b71c1c}
+  .alert-warn{background:#fff8e1;border-left:3px solid #fb8c00;color:#e65100}
+  .alert-ok{background:#e8f5e9;border-left:3px solid #43a047;color:#1b5e20;padding:10px 12px;border-radius:10px;font-size:13px}
+  .alert-name{font-weight:700;margin-bottom:2px}
 
-[data-testid="stInfo"], [data-testid="stWarning"],
-[data-testid="stError"], [data-testid="stSuccess"] { border-radius: 8px !important; }
+  /* ── TABLE ── */
+  .table-scroll{overflow-x:auto;border-radius:10px}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:320px}
+  th{font-size:11px;font-weight:600;color:#78909c;padding:8px 10px;border-bottom:1px solid #e8f0e8;text-align:left;white-space:nowrap}
+  td{padding:10px 10px;border-bottom:1px solid #f5f7f5;color:#263238;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .pill{font-size:11px;padding:3px 8px;border-radius:10px;font-weight:600;white-space:nowrap}
+  .pill-normal{background:#e8f5e9;color:#1b5e20}
+  .pill-alerte{background:#fff3e0;color:#e65100}
+  .pill-critique{background:#ffebee;color:#c62828}
 
-/* RTL support for Arabic */
-.rtl { direction: rtl; text-align: right; }
+  /* ── FILTER PILLS ── */
+  .filters{display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap}
+  .filter-pill{border:1px solid #c8e6c9;border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:#546e7a;transition:all .15s}
+  .filter-pill.active{background:#2e7d32;border-color:#2e7d32;color:#ffffff}
+
+  /* ── FOOTER ── */
+  .footer{text-align:center;font-size:11px;color:#aaa;padding:12px 0 4px;border-top:1px solid #e8f0e8;margin-top:8px}
+
+  /* ── RTL support ── */
+  body.rtl{direction:rtl}
+  body.rtl .alert-crit,body.rtl .alert-warn{border-left:none;border-right:3px solid}
+  body.rtl .alert-crit{border-right-color:#e53935}
+  body.rtl .alert-warn{border-right-color:#fb8c00}
 </style>
-""", unsafe_allow_html=True)
+</head>
+<body>
 
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">🐄</div>
+    <div>
+      <div class="app-name">AgriBovin IA</div>
+      <div class="app-sub" id="sub-tagline">Santé animale intelligente</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="lang-switcher">
+      <button class="lang-btn active" onclick="setLang('fr')">FR</button>
+      <button class="lang-btn" onclick="setLang('ar')">AR</button>
+      <button class="lang-btn" onclick="setLang('en')">EN</button>
+    </div>
+    <div class="refresh-btn" id="refreshBtn" onclick="refreshData()">&#x21bb;</div>
+  </div>
+</div>
 
-# ─── SESSION STATE ────────────────────────────────────────────────────────────
-if "lang" not in st.session_state:
-    st.session_state.lang = "FR"
-if "show_system" not in st.session_state:
-    st.session_state.show_system = False
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <span><span class="status-dot"></span><span id="status-txt">En ligne · Dernière maj :</span> <span id="last-update">—</span></span>
+  <span id="source-txt">Source: PHP</span>
+</div>
 
+<!-- MAIN -->
+<div class="main">
+  <div id="error-zone"></div>
 
-# ─── Chargement des données ───────────────────────────────────────────────────
-@st.cache_data(ttl=30)
-def load_data():
-    try:
-        r = requests.get(API_URL, timeout=10)
-        return r.json()
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+  <!-- METRICS -->
+  <div id="section-overview" class="section-title">Vue d'ensemble</div>
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label" id="lbl-total">Total animaux</div>
+      <div class="metric-value blue" id="m-total">—</div>
+      <span class="metric-badge badge-ok" id="b-total">têtes</span>
+    </div>
+    <div class="metric">
+      <div class="metric-label" id="lbl-sains">En bonne santé</div>
+      <div class="metric-value green" id="m-sains">—</div>
+      <span class="metric-badge badge-ok" id="b-sain">normal</span>
+    </div>
+    <div class="metric">
+      <div class="metric-label" id="lbl-alertes">En alerte</div>
+      <div class="metric-value orange" id="m-alertes">—</div>
+      <span class="metric-badge badge-warn" id="b-alert">alerte</span>
+    </div>
+    <div class="metric">
+      <div class="metric-label" id="lbl-critiques">Critiques</div>
+      <div class="metric-value red" id="m-critiques">—</div>
+      <span class="metric-badge badge-crit" id="b-crit">critique</span>
+    </div>
+  </div>
 
+  <!-- DONUT -->
+  <div id="section-charts" class="section-title">Graphiques</div>
+  <div class="card">
+    <div class="card-title" id="lbl-repartition">Répartition santé</div>
+    <div style="position:relative;width:100%;height:200px">
+      <canvas id="donutChart" role="img" aria-label="Répartition des statuts de santé"></canvas>
+    </div>
+    <div class="legend" id="donut-legend"></div>
+  </div>
 
-# ─── SIDEBAR ──────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## 🐄 AgriBovin IA")
-    st.markdown("---")
+  <!-- BAR CHART -->
+  <div class="card">
+    <div class="card-title" id="lbl-confiance">Confiance IA par animal</div>
+    <div id="bar-wrap" style="position:relative;width:100%;height:240px">
+      <canvas id="barChart" role="img" aria-label="Score de confiance IA par animal"></canvas>
+    </div>
+  </div>
 
-    # ── Sélecteur de langue ──
-    lang_options = ["FR", "EN", "AR"]
-    T = TRANSLATIONS[st.session_state.lang]
+  <!-- ALERTS -->
+  <div id="section-alerts" class="section-title">Alertes récentes</div>
+  <div class="card" id="alerts-card">
+    <div id="alert-list"><div style="color:#aaa;font-size:13px">Chargement...</div></div>
+  </div>
 
-    selected_lang = st.selectbox(
-        T["lang_label"],
-        lang_options,
-        index=lang_options.index(st.session_state.lang),
-        key="lang_selector"
-    )
-    if selected_lang != st.session_state.lang:
-        st.session_state.lang = selected_lang
-        st.rerun()
+  <!-- TABLE -->
+  <div id="section-diag" class="section-title">Diagnostic détaillé</div>
+  <div class="card">
+    <div class="filters" id="filter-row">
+      <button class="filter-pill active" onclick="filterTable('all',this)" id="f-all">Tous</button>
+      <button class="filter-pill" onclick="filterTable('normal',this)" id="f-normal">Normal</button>
+      <button class="filter-pill" onclick="filterTable('alerte',this)" id="f-alerte">Alerte</button>
+      <button class="filter-pill" onclick="filterTable('critique',this)" id="f-critique">Critique</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th id="th-animal">Animal</th>
+            <th id="th-statut">Statut</th>
+            <th id="th-diag">Diagnostic</th>
+            <th id="th-conf">Confiance</th>
+          </tr>
+        </thead>
+        <tbody id="diag-tbody"></tbody>
+      </table>
+    </div>
+  </div>
 
-    T = TRANSLATIONS[st.session_state.lang]  # reload after possible change
+  <div class="footer" id="footer-txt">AgriBovin IA v3.0 · Auto-refresh 30s</div>
+</div>
 
-    st.markdown("---")
+<script>
+const API_URL = "https://bovin.atwebpages.com/api/ia_data.php";
+let allResults = [];
+let donutInst = null, barInst = null;
+let currentLang = 'fr';
 
-    if st.button(T["refresh_btn"]):
-        st.cache_data.clear()
-        st.rerun()
+const T = {
+  fr: {
+    tagline:"Santé animale intelligente", online:"En ligne · Dernière maj :", source:"Source",
+    overview:"Vue d'ensemble", total:"Total animaux", sains:"En bonne santé", alertes:"En alerte", critiques:"Critiques",
+    tetes:"têtes", normal:"normal", alerte:"alerte", critique:"critique",
+    charts:"Graphiques", repartition:"Répartition santé", confiance:"Confiance IA par animal",
+    alertsTitle:"Alertes récentes", noAlerts:"Aucune alerte active", diag:"Diagnostic détaillé",
+    all:"Tous", thAnimal:"Animal", thStatut:"Statut", thDiag:"Diagnostic", thConf:"Confiance",
+    loading:"Chargement...", noData:"Aucune donnée", errApi:"Erreur API :",
+    footer:"AgriBovin IA v3.0 · Auto-refresh 30s"
+  },
+  ar: {
+    tagline:"صحة الحيوانات الذكية", online:"متصل · آخر تحديث :", source:"المصدر",
+    overview:"نظرة عامة", total:"إجمالي الحيوانات", sains:"بصحة جيدة", alertes:"في حالة تنبيه", critiques:"حالات حرجة",
+    tetes:"رأس", normal:"طبيعي", alerte:"تنبيه", critique:"حرج",
+    charts:"الرسوم البيانية", repartition:"توزيع الحالات الصحية", confiance:"مستوى ثقة الذكاء الاصطناعي",
+    alertsTitle:"التنبيهات الأخيرة", noAlerts:"لا توجد تنبيهات نشطة", diag:"التشخيص التفصيلي",
+    all:"الكل", thAnimal:"الحيوان", thStatut:"الحالة", thDiag:"التشخيص", thConf:"الثقة",
+    loading:"جارٍ التحميل...", noData:"لا توجد بيانات", errApi:"خطأ في API :",
+    footer:"AgriBovin IA v3.0 · تحديث تلقائي كل 30 ثانية"
+  },
+  en: {
+    tagline:"Intelligent animal health", online:"Online · Last update:", source:"Source",
+    overview:"Overview", total:"Total animals", sains:"Healthy", alertes:"On alert", critiques:"Critical",
+    tetes:"heads", normal:"normal", alerte:"alert", critique:"critical",
+    charts:"Charts", repartition:"Health breakdown", confiance:"AI confidence per animal",
+    alertsTitle:"Recent alerts", noAlerts:"No active alerts", diag:"Detailed diagnosis",
+    all:"All", thAnimal:"Animal", thStatut:"Status", thDiag:"Diagnosis", thConf:"Confidence",
+    loading:"Loading...", noData:"No data available", errApi:"API error:",
+    footer:"AgriBovin IA v3.0 · Auto-refresh 30s"
+  }
+};
 
-    st.markdown("---")
-    now_str = datetime.now().strftime("%d/%m/%Y  %H:%M:%S")
-    st.markdown(f"{T['last_update']} `{now_str}`")
-    st.markdown("---")
+function t(k){ return T[currentLang][k] || k; }
 
-    # ── Bouton Système (toggle) ──
-    if st.button(T["system_btn"]):
-        st.session_state.show_system = not st.session_state.show_system
-
-    if st.session_state.show_system:
-        st.markdown(
-            f"""<div class="system-panel">
-                <p>🔌 {T['system_api']} PHP Expert</p>
-                <p>🗄️ {T['system_db']} MySQL AwardSpace</p>
-                <p>🔄 {T['system_refresh']} 30 s</p>
-            </div>""",
-            unsafe_allow_html=True
-        )
-
-    st.markdown("---")
-
-    st.markdown(f"### {T['recent_alerts']}")
-    data_sb = load_data()
-    if data_sb.get("success"):
-        alertes_sb = data_sb.get("alertes", [])
-        if alertes_sb:
-            for a in alertes_sb[:5]:
-                sev  = a.get("severite", "alerte")
-                nom  = a.get("nom_animal", "?")
-                msg  = a.get("message", "")
-                cls  = "alert-critique" if sev == "critique" else "alert-alerte"
-                icon = "🔴" if sev == "critique" else "🟡"
-                st.markdown(
-                    f'<div class="alert-box {cls}">{icon} <b>{nom}</b><br>{msg}</div>',
-                    unsafe_allow_html=True
-                )
-        else:
-            st.success(T["no_alert"])
-    else:
-        st.error(T["alert_load_err"])
-
-
-# ─── EN-TÊTE ─────────────────────────────────────────────────────────────────
-rtl_class = "rtl" if st.session_state.lang == "AR" else ""
-st.markdown(f'<div class="{rtl_class}"><h1>{T["title"]}</h1></div>', unsafe_allow_html=True)
-st.caption(T["caption"])
-
-# ─── Chargement principal ─────────────────────────────────────────────────────
-data = load_data()
-
-if not data.get("success"):
-    st.error(f"{T['api_err']} {data.get('error', '?')}")
-    st.info(f"{T['api_check']} `{API_URL}`")
-    st.stop()
-
-stats   = data.get("stats", {})
-results = data.get("resultats_ia", [])
-alertes = data.get("alertes", [])
-
-
-# ─── MÉTRIQUES ───────────────────────────────────────────────────────────────
-st.markdown(T["overview"])
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.metric(T["total"], stats.get("total", 0))
-with col2:
-    st.metric(T["healthy"], stats.get("sains", 0))
-with col3:
-    val_a = int(stats.get("alertes", 0))
-    st.metric(T["alert_count"], val_a,
-              delta=f"+{val_a}" if val_a > 0 else None, delta_color="inverse")
-with col4:
-    val_c = int(stats.get("critiques", 0))
-    st.metric(T["critical"], val_c,
-              delta=f"+{val_c}" if val_c > 0 else None, delta_color="inverse")
-
-st.divider()
-
-
-# ─── GRAPHIQUES ──────────────────────────────────────────────────────────────
-color_map = {
-    "normal":   "#4caf50",
-    "alerte":   "#ff9800",
-    "critique": "#f44336"
+function setLang(lang) {
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.body.classList.toggle('rtl', lang === 'ar');
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.textContent === lang.toUpperCase()));
+  applyTranslations();
 }
 
-if results:
-    df = pd.DataFrame(results)
+function applyTranslations() {
+  const ids = {
+    'sub-tagline':'tagline','status-txt':'online','section-overview':'overview',
+    'lbl-total':'total','lbl-sains':'sains','lbl-alertes':'alertes','lbl-critiques':'critiques',
+    'b-sain':'normal','b-alert':'alerte','b-crit':'critique',
+    'section-charts':'charts','lbl-repartition':'repartition','lbl-confiance':'confiance',
+    'section-alerts':'alertsTitle','section-diag':'diag',
+    'f-all':'all','th-animal':'thAnimal','th-statut':'thStatut','th-diag':'thDiag','th-conf':'thConf',
+    'footer-txt':'footer'
+  };
+  Object.entries(ids).forEach(([id,key]) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = t(key);
+  });
+  document.getElementById('source-txt').textContent = t('source') + ': PHP';
+  renderTable(allResults);
+  renderAlerts(window._alertsData || []);
+}
 
-    st.markdown(T["charts"])
-    col_g1, col_g2 = st.columns(2)
+async function fetchData() {
+  const r = await fetch(API_URL);
+  return await r.json();
+}
 
-    with col_g1:
-        counts = df["statut"].value_counts().reset_index()
-        counts.columns = ["Statut", "Nombre"]
-        # Translate statut labels for display
-        counts["Statut_label"] = counts["Statut"].map(T["statuts"]).fillna(counts["Statut"])
-        fig_pie = px.pie(
-            counts, values="Nombre", names="Statut_label",
-            title=T["pie_title"],
-            color="Statut",
-            color_discrete_map=color_map,
-            hole=0.45
-        )
-        fig_pie.update_traces(
-            textposition="inside", textinfo="percent+label",
-            marker=dict(line=dict(color="#ffffff", width=2))
-        )
-        fig_pie.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font_color="#2e7d32", title_font_color="#1b5e20", title_font_size=15,
-            showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=-0.15,
-                        xanchor="center", x=0.5, font=dict(size=12)),
-            margin=dict(t=50, b=30, l=10, r=10)
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
+function renderMetrics(stats) {
+  document.getElementById('m-total').textContent = stats.total ?? '—';
+  document.getElementById('m-sains').textContent = stats.sains ?? '—';
+  document.getElementById('m-alertes').textContent = stats.alertes ?? '—';
+  document.getElementById('m-critiques').textContent = stats.critiques ?? '—';
+  document.getElementById('b-total').textContent = (stats.total ?? 0) + ' ' + t('tetes');
+}
 
-    with col_g2:
-        df_sorted = df.sort_values("confidence", ascending=True).tail(15)
-        bar_colors = df_sorted["statut"].map(color_map).fillna("#888888")
-        fig_bar = go.Figure(go.Bar(
-            x=df_sorted["confidence"],
-            y=df_sorted["nom_animal"],
-            orientation="h",
-            marker_color=bar_colors.tolist(),
-            marker_line_width=0,
-            text=df_sorted["confidence"].astype(str) + T["conf_suffix"],
-            textposition="auto",
-            textfont=dict(size=11, color="#ffffff")
-        ))
-        fig_bar.update_layout(
-            title=T["bar_title"],
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(241,248,233,0.6)",
-            font_color="#2e7d32", title_font_color="#1b5e20", title_font_size=15,
-            xaxis=dict(range=[0, 105], gridcolor="#e8f5e9",
-                       ticksuffix=T["conf_suffix"], title="Confiance (%)"),
-            yaxis=dict(gridcolor="#e8f5e9", automargin=True),
-            margin=dict(t=50, b=30, l=10, r=20), bargap=0.25
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
+function renderDonut(results) {
+  const counts = {normal:0,alerte:0,critique:0};
+  results.forEach(r => { if(counts[r.statut]!==undefined) counts[r.statut]++; });
+  const labels = [t('normal'), t('alerte'), t('critique')];
+  const colors = ['#4caf50','#ff9800','#f44336'];
+  if(donutInst) donutInst.destroy();
+  donutInst = new Chart(document.getElementById('donutChart'),{
+    type:'doughnut',
+    data:{ labels, datasets:[{ data:[counts.normal,counts.alerte,counts.critique], backgroundColor:colors, borderWidth:2, borderColor:'#fff', hoverOffset:4 }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed}`}}},cutout:'58%'}
+  });
+  document.getElementById('donut-legend').innerHTML = labels.map((l,i)=>
+    `<span class="legend-item"><span class="legend-dot" style="background:${colors[i]}"></span>${l}: ${[counts.normal,counts.alerte,counts.critique][i]}</span>`
+  ).join('');
+}
 
-st.divider()
+function renderBar(results) {
+  const top = [...results].sort((a,b)=>b.confidence-a.confidence).slice(0,10);
+  const colorMap = {normal:'#4caf50',alerte:'#ff9800',critique:'#f44336'};
+  const h = Math.max(200, top.length*30+60);
+  document.getElementById('bar-wrap').style.height = h+'px';
+  if(barInst) barInst.destroy();
+  barInst = new Chart(document.getElementById('barChart'),{
+    type:'bar',
+    data:{labels:top.map(r=>r.nom_animal),datasets:[{data:top.map(r=>r.confidence),backgroundColor:top.map(r=>colorMap[r.statut]||'#888'),borderRadius:4,borderSkipped:false}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.x}%`}}},scales:{x:{min:0,max:100,grid:{color:'rgba(0,0,0,0.04)'},ticks:{callback:v=>v+'%',font:{size:10}}},y:{grid:{display:false},ticks:{font:{size:10}}}}}
+  });
+}
 
+function renderAlerts(alertes) {
+  window._alertsData = alertes;
+  const c = document.getElementById('alert-list');
+  if(!alertes||!alertes.length){
+    c.innerHTML = `<div class="alert-ok">${t('noAlerts')}</div>`; return;
+  }
+  c.innerHTML = alertes.slice(0,6).map(a=>`
+    <div class="alert-item ${a.severite==='critique'?'alert-crit':'alert-warn'}">
+      <div class="alert-name">${a.nom_animal}</div>
+      <div>${a.message}</div>
+    </div>`).join('');
+}
 
-# ─── TABLEAU DIAGNOSTIC ───────────────────────────────────────────────────────
-st.markdown(T["diag_title"])
+let _activeFilter = 'all';
+function filterTable(f, btn) {
+  _activeFilter = f;
+  document.querySelectorAll('.filter-pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable(allResults);
+}
 
-if results:
-    df_diag = pd.DataFrame(results)[["nom_animal", "statut", "maladie", "confidence"]]
-    df_diag.columns = [T["col_animal"], T["col_status"], T["col_diag"], T["col_conf"]]
+function renderTable(results) {
+  const tbody = document.getElementById('diag-tbody');
+  const filtered = _activeFilter==='all' ? results : results.filter(r=>r.statut===_activeFilter);
+  if(!filtered.length){ tbody.innerHTML=`<tr><td colspan="4" style="color:#aaa;text-align:center;padding:16px">${t('noData')}</td></tr>`; return; }
+  tbody.innerHTML = filtered.map(r=>`<tr>
+    <td style="font-weight:600">${r.nom_animal}</td>
+    <td><span class="pill pill-${r.statut}">${t(r.statut)}</span></td>
+    <td style="color:#546e7a;font-size:12px">${r.maladie||'—'}</td>
+    <td style="font-weight:600;color:#1b5e20">${r.confidence}%</td>
+  </tr>`).join('');
+}
 
-    col_f1, col_f2 = st.columns([1, 3])
-    with col_f1:
-        filter_options = [T["filter_all"], "normal", "alerte", "critique"]
-        filtre = st.selectbox(T["filter_label"], filter_options, key="filtre_statut")
+async function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  document.getElementById('error-zone').innerHTML = '';
+  try {
+    const data = await fetchData();
+    if(!data.success) throw new Error(data.error||'unknown');
+    allResults = data.resultats_ia || [];
+    renderMetrics(data.stats||{});
+    if(allResults.length){ renderDonut(allResults); renderBar(allResults); }
+    renderAlerts(data.alertes||[]);
+    renderTable(allResults);
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+    document.getElementById('source-txt').textContent = t('source')+': '+(data.source_ia||'PHP');
+  } catch(e) {
+    document.getElementById('error-zone').innerHTML = `<div class="error-card">${t('errApi')} ${e.message}</div>`;
+  }
+  btn.classList.remove('spinning');
+}
 
-    if filtre != T["filter_all"]:
-        df_diag = df_diag[df_diag[T["col_status"]] == filtre]
-
-    st.dataframe(df_diag, use_container_width=True, height=400, hide_index=True)
-else:
-    st.info(T["no_data"])
-
-st.divider()
-
-
-# ─── FOOTER ──────────────────────────────────────────────────────────────────
-source  = data.get("source_ia", "PHP")
-dernier = data.get("dernier_analyse", "—")
-st.markdown(
-    f"""<div class="footer-bar">
-        ⬡ AgriBovin IA v3.0 &nbsp;|&nbsp;
-        {T['footer_source']} : <b>{source}</b> &nbsp;|&nbsp;
-        {T['footer_last']} : <b>{dernier}</b> &nbsp;|&nbsp;
-        🔄 {T['footer_refresh']}
-    </div>""",
-    unsafe_allow_html=True
-)
-
-
-# ─── AUTO-REFRESH ─────────────────────────────────────────────────────────────
-time.sleep(30)
-st.rerun()
+refreshData();
+setInterval(refreshData, 30000);
+</script>
+</body>
+</html>
